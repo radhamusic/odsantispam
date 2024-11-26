@@ -1,6 +1,8 @@
 import asyncio
 import re
+import threading
 from importlib import import_module as import_
+from flask import Flask
 
 from pyrogram import filters, idle
 from pyrogram.types import (CallbackQuery, InlineKeyboardButton,
@@ -14,8 +16,19 @@ from spr.utils.misc import once_a_day, once_a_minute, paginate_modules
 
 HELPABLE = {}
 
+# Flask web server for port 8000
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return "SpamProtectionBot is running on port 8000!"
+
+def run_flask():
+    """Run the Flask server on port 8000."""
+    app.run(host="0.0.0.0", port=8000)
 
 async def main():
+    """Main entry point for starting the bot."""
     await spr.start()
     # Load all the modules.
     for module in MODULES:
@@ -32,7 +45,7 @@ async def main():
                 HELPABLE[
                     imported_module.__MODULE__.lower()
                 ] = imported_module
-    print("STARTED !")
+    print("STARTED!")
     loop = asyncio.get_running_loop()
     loop.create_task(once_a_day())
     loop.create_task(once_a_minute())
@@ -42,18 +55,18 @@ async def main():
     await session.close()
     await spr.stop()
 
-
 @spr.on_message(filters.command(["help", "start"]), group=2)
 async def help_command(_, message: Message):
+    """Handle /help and /start commands."""
     if message.chat.type != ChatType.PRIVATE:
         kb = ikb({"Help": f"https://t.me/{BOT_USERNAME}?start=help"})
         return await message.reply("Pm Me For Help", reply_markup=kb)
     kb = ikb(
         {
-            "Help": "bot_commands",
-            "Repo": "https://github.com/TheHamkerCat/SpamProtectionRobot",
+            "Support": "https://t.me/iamvillain77",
+            "Owner": "https://t.me/iamakki001",
             "Add Me To Your Group": f"https://t.me/{BOT_USERNAME}?startgroup=new",
-            "Support Chat (for now)": "https://t.me/WBBSupport",
+            "Help": "bot_commands",
         }
     )
     mention = message.from_user.mention
@@ -64,9 +77,9 @@ async def help_command(_, message: Message):
         reply_markup=kb,
     )
 
-
 @spr.on_callback_query(filters.regex("bot_commands"))
 async def commands_callbacc(_, cq: CallbackQuery):
+    """Handle callback query for bot commands."""
     text, keyboard = await help_parser(cq.from_user.mention)
     await asyncio.gather(
         cq.answer(),
@@ -78,8 +91,8 @@ async def commands_callbacc(_, cq: CallbackQuery):
         ),
     )
 
-
 async def help_parser(name, keyboard=None):
+    """Helper function to generate help text and keyboard."""
     if not keyboard:
         keyboard = InlineKeyboardMarkup(
             paginate_modules(0, HELPABLE, "help")
@@ -91,9 +104,9 @@ async def help_parser(name, keyboard=None):
         keyboard,
     )
 
-
 @spr.on_callback_query(filters.regex(r"help_(.*?)"))
 async def help_button(client, query: CallbackQuery):
+    """Handle help buttons and paginate the modules."""
     mod_match = re.match(r"help_module\((.+?)\)", query.data)
     prev_match = re.match(r"help_prev\((.+?)\)", query.data)
     next_match = re.match(r"help_next\((.+?)\)", query.data)
@@ -167,12 +180,17 @@ async def help_button(client, query: CallbackQuery):
 
     return await client.answer_callback_query(query.id)
 
-
 @spr.on_message(filters.command("runs"), group=3)
 async def runs_func(_, message: Message):
+    """Respond to /runs command."""
     await message.reply("What am i? Rose?")
 
-
 if __name__ == "__main__":
+    # Start Flask server in a separate thread to listen on port 8000
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # Run the bot in the main thread
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
